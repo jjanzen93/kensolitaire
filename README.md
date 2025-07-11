@@ -1,0 +1,1 @@
+Seeing how smoothly I could guide Google Gemini to make a customizable version of Solitaire for my girlfriend. Minimal editing from myself, ran into some issues with uploading images for card backs and aligning tableau piles with the foundation piles on the left edge of the play area, so I had to step in there since Gemini could not resolve those issues effectively.
