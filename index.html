@@ -18,12 +18,13 @@
                 linear-gradient(45deg, transparent 75%, #60a5fa 75%),
                 linear-gradient(-45deg, transparent 75%, #60a5fa 75%);
             --hint-border-color: pink;
+            --background-color: #15803d;
         }
 
         body {
             font-family: 'Inter', sans-serif;
             user-select: none;
-            background-color: #15803d; /* Fallback color */
+            background-color: var(--background-color);
         }
 
         #video-background-wrapper {
@@ -64,7 +65,6 @@
             z-index: 1000;
         }
 
-        /* Style for the hint highlight */
         .hint-highlight {
             box-shadow: 0 0 0 4px var(--hint-border-color), 0 2px 4px rgba(0,0,0,0.1);
         }
@@ -108,15 +108,13 @@
         }
     </style>
 </head>
-<body class="bg-green-800 text-white">
+<body class="text-white">
 
-    <!-- Video Background Player -->
     <div id="video-background-wrapper">
         <div id="youtube-player"></div>
     </div>
 
     <div id="game-container" class="min-h-screen flex flex-col items-center p-4">
-        <!-- Top Bar: Controls and Foundations -->
         <div class="w-full max-w-6xl flex justify-between items-start mb-4">
             <div class="flex flex-col space-y-2">
                 <div class="flex space-x-2">
@@ -133,7 +131,6 @@
             <div id="foundations" class="flex space-x-4"></div>
         </div>
 
-        <!-- Main Game Area -->
         <div class="w-full max-w-6xl flex-grow">
             <div class="flex justify-between mb-4">
                 <div class="flex space-x-4">
@@ -141,10 +138,9 @@
                     <div id="waste-pile" class="relative"></div>
                 </div>
             </div>
-            <div id="tableau" class="relative h-full" style="padding-right:80px;"></div>
+            <div id="tableau" class="flex justify-between h-full" style="padding-right: 80px;"></div>
         </div>
 
-        <!-- Win Message Modal -->
         <div id="win-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
             <div class="bg-white text-gray-800 p-8 rounded-lg shadow-2xl text-center">
                 <h2 class="text-4xl font-bold mb-4 text-green-600">You Win!</h2>
@@ -153,11 +149,14 @@
             </div>
         </div>
 
-        <!-- Settings Modal -->
         <div id="settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
             <div class="bg-white text-gray-800 p-6 rounded-lg shadow-2xl w-full max-w-sm">
                 <h2 class="text-2xl font-bold mb-4">Appearance Settings</h2>
                 <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <label for="bg-color">Background Color:</label>
+                        <input type="color" id="bg-color" value="#15803d">
+                    </div>
                     <div class="flex justify-between items-center">
                         <label for="card-face-color">Card Face Color:</label>
                         <input type="color" id="card-face-color" value="#ffffff">
@@ -189,7 +188,7 @@
 
     <script src="https://www.youtube.com/iframe_api"></script>
     <script>
-        // YouTube Player Logic
+        // *** BUG FIX: Moved YouTube functions to the global scope ***
         let player;
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('youtube-player', {
@@ -223,6 +222,7 @@
             const settingsModal = document.getElementById('settings-modal');
             const settingsCancelBtn = document.getElementById('settings-cancel-btn');
             const settingsSaveBtn = document.getElementById('settings-save-btn');
+            const bgColorInput = document.getElementById('bg-color');
             const cardFaceColorInput = document.getElementById('card-face-color');
             const redSuitColorInput = document.getElementById('red-suit-color');
             const blackSuitColorInput = document.getElementById('black-suit-color');
@@ -241,7 +241,62 @@
             let stock = [], waste = [], foundations = [[], [], [], []], tableau = [[], [], [], [], [], [], []], historyStack = [];
             let dragged = { element: null, cards: [], sourcePile: null, sourceType: null, sourceLocationId: null };
 
-            // Card Creation & Game Setup
+            // --- Save/Load Logic ---
+            function saveGameState() {
+                const gameState = { stock, waste, foundations, tableau, historyStack };
+                localStorage.setItem('solitaireGameState', JSON.stringify(gameState));
+            }
+
+            function saveAppearanceSettings() {
+                const settings = {
+                    bgColor: bgColorInput.value,
+                    cardFaceColor: cardFaceColorInput.value,
+                    redSuitColor: redSuitColorInput.value,
+                    blackSuitColor: blackSuitColorInput.value,
+                    hintColor: hintColorInput.value,
+                    customCardBackUrl
+                };
+                localStorage.setItem('solitaireAppearanceSettings', JSON.stringify(settings));
+            }
+
+            function loadAppearanceSettings() {
+                const savedSettings = localStorage.getItem('solitaireAppearanceSettings');
+                if (savedSettings) {
+                    const settings = JSON.parse(savedSettings);
+                    bgColorInput.value = settings.bgColor || '#15803d';
+                    cardFaceColorInput.value = settings.cardFaceColor || '#ffffff';
+                    redSuitColorInput.value = settings.redSuitColor || '#dc2626';
+                    blackSuitColorInput.value = settings.blackSuitColor || '#171717';
+                    hintColorInput.value = settings.hintColor || '#ec4899';
+                    customCardBackUrl = settings.customCardBackUrl || null;
+                }
+                applyAppearanceSettings();
+            }
+
+            function applyAppearanceSettings() {
+                document.documentElement.style.setProperty('--background-color', bgColorInput.value);
+                document.documentElement.style.setProperty('--card-face-bg', cardFaceColorInput.value);
+                document.documentElement.style.setProperty('--red-suit-color', redSuitColorInput.value);
+                document.documentElement.style.setProperty('--black-suit-color', blackSuitColorInput.value);
+                document.documentElement.style.setProperty('--hint-border-color', hintColorInput.value);
+            }
+
+            function loadGameState() {
+                const savedState = localStorage.getItem('solitaireGameState');
+                if (savedState) {
+                    const gameState = JSON.parse(savedState);
+                    stock = gameState.stock;
+                    waste = gameState.waste;
+                    foundations = gameState.foundations;
+                    tableau = gameState.tableau;
+                    historyStack = gameState.historyStack;
+                    renderAll();
+                    updateUndoButton();
+                } else {
+                    initGame(true);
+                }
+            }
+            
             function createDeck() {
                 const deck = []; let idCounter = 0;
                 SUITS.forEach(suit => { RANKS.forEach(rank => {
@@ -249,16 +304,22 @@
                 }); }); return deck;
             }
             function shuffleDeck(deck) { for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[deck[i], deck[j]] = [deck[j], deck[i]]; } }
-            function initGame() {
+            function initGame(isNewGame = false) {
+                if (isNewGame) {
+                    localStorage.removeItem('solitaireGameState');
+                }
+                document.body.style.backgroundColor = 'var(--background-color)';
                 stock = []; waste = []; foundations = [[], [], [], []]; tableau = [[], [], [], [], [], [], []]; historyStack = [];
                 winModal.classList.add('hidden');
                 const deck = createDeck(); shuffleDeck(deck);
                 for (let i = 0; i < 7; i++) { for (let j = i; j < 7; j++) { tableau[j].push(deck.pop()); } }
                 tableau.forEach(pile => { if (pile.length > 0) pile[pile.length - 1].faceUp = true; });
-                stock = deck; renderAll(); updateUndoButton();
+                stock = deck; 
+                saveGameState();
+                renderAll(); 
+                updateUndoButton();
             }
 
-            // Rendering
             function renderAll() { renderTableau(); renderFoundations(); renderStock(); renderWaste(); applyHints(); }
             function createCardElement(card) {
                 const cardEl = document.createElement('div'); cardEl.classList.add('card'); cardEl.dataset.id = card.id;
@@ -279,7 +340,7 @@
             }
             function renderTableau() {
                 tableauContainer.innerHTML = ''; 
-                tableauContainer.classList.add('flex', 'justify-between'); // Use flexbox for even spacing
+                tableauContainer.classList.add('flex', 'justify-between'); 
                 tableau.forEach((pile, pileIndex) => {
                     const pileContainer = document.createElement('div'); 
                     pileContainer.classList.add('tableau-pile', 'relative');
@@ -324,8 +385,7 @@
                 }
             }
 
-            // Undo Logic
-            function recordTurn(movements) { historyStack.push(movements); updateUndoButton(); }
+            function recordTurn(movements) { historyStack.push(movements); updateUndoButton(); saveGameState(); }
             function findCardAndPile(cardId) {
                 const allPiles = [{ pile: stock, name: 'stock' }, { pile: waste, name: 'waste' }, ...foundations.map((p, i) => ({ pile: p, name: `foundation-${i}` })), ...tableau.map((p, i) => ({ pile: p, name: `tableau-${i}` }))];
                 for (const { pile } of allPiles) {
@@ -356,11 +416,10 @@
                     const firstMove = items[0].move; if (firstMove.flipped) { cardsToAdd.forEach(c => { c.faceUp = false; }); }
                     if (firstMove.flippedCardId) { const { card: cardToUnflip } = findCardAndPile(firstMove.flippedCardId); if (cardToUnflip) { cardToUnflip.faceUp = false; } }
                 }
-                renderAll(); updateUndoButton();
+                saveGameState(); renderAll(); updateUndoButton();
             }
             function updateUndoButton() { undoBtn.disabled = historyStack.length === 0; }
 
-            // Game Logic
             function dealFromStock() {
                 const movements = [];
                 if (stock.length === 0 && waste.length > 0) {
@@ -371,7 +430,7 @@
                     cardsToMove.forEach(card => { movements.push({ cardId: card.id, from: 'stock', to: 'waste', flipped: true, flippedCardId: null }); });
                     for (let i = 0; i < numToDeal; i++) { const card = stock.pop(); card.faceUp = true; waste.push(card); }
                 }
-                if (movements.length > 0) { recordTurn(movements); } renderAll();
+                if (movements.length > 0) { recordTurn(movements); }
             }
             function checkWinCondition() { const total = foundations.reduce((sum, p) => sum + p.length, 0); if (total === 52) winModal.classList.remove('hidden'); }
             function canPlaceOnTableau(card, targetPile) {
@@ -383,25 +442,20 @@
                 return card.suit === top.suit && RANK_VALUES[card.rank] === RANK_VALUES[top.rank] + 1;
             }
 
-            // Hint Logic
             function findValidMoves() {
                 const moves = new Set();
-                // Check waste pile
                 if (waste.length > 0) {
                     const card = waste[waste.length - 1];
                     for (let i = 0; i < foundations.length; i++) { if (canPlaceOnFoundation(card, foundations[i])) moves.add(card.id); }
                     for (let i = 0; i < tableau.length; i++) { if (canPlaceOnTableau(card, tableau[i])) moves.add(card.id); }
                 }
-                // Check tableau piles
                 tableau.forEach((pile, pileIndex) => {
                     for (let i = 0; i < pile.length; i++) {
                         if (pile[i].faceUp) {
                             const card = pile[i];
-                            // Check move to foundation (only top card of stack)
                             if (i === pile.length - 1) {
                                 for (let f = 0; f < foundations.length; f++) { if (canPlaceOnFoundation(card, foundations[f])) moves.add(card.id); }
                             }
-                            // Check move to other tableau
                             for (let t = 0; t < tableau.length; t++) {
                                 if (pileIndex !== t) { if (canPlaceOnTableau(card, tableau[t])) moves.add(card.id); }
                             }
@@ -422,30 +476,33 @@
                 }
             }
 
-            // Event Handlers
             playVideoBtn.addEventListener('click', () => {
                 const url = youtubeUrlInput.value; const videoId = getYouTubeVideoId(url);
-                if (videoId && player) { player.loadVideoById(videoId); player.mute(); }
+                if (videoId && player) { 
+                    player.loadVideoById(videoId); 
+                    player.mute(); 
+                    document.body.style.backgroundColor = 'rgba(0,0,0,0)';
+                }
             });
-            stockPileContainer.addEventListener('click', dealFromStock);
-            newGameBtn.addEventListener('click', initGame); winNewGameBtn.addEventListener('click', initGame); undoBtn.addEventListener('click', undoMove);
+            stockPileContainer.addEventListener('click', () => { dealFromStock(); saveGameState(); renderAll(); });
+            newGameBtn.addEventListener('click', () => initGame(true)); 
+            winNewGameBtn.addEventListener('click', () => initGame(true)); 
+            undoBtn.addEventListener('click', undoMove);
             settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
             settingsCancelBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
             settingsSaveBtn.addEventListener('click', () => {
-                document.documentElement.style.setProperty('--card-face-bg', cardFaceColorInput.value);
-                document.documentElement.style.setProperty('--red-suit-color', redSuitColorInput.value);
-                document.documentElement.style.setProperty('--black-suit-color', blackSuitColorInput.value);
-                document.documentElement.style.setProperty('--hint-border-color', hintColorInput.value);
-                
                 const file = cardBackImageInput.files[0];
+                applyAppearanceSettings();
                 if (file) {
                     const reader = new FileReader();
                     reader.onload = (e) => {
                         customCardBackUrl = e.target.result;
+                        saveAppearanceSettings();
                         renderAll();
                     };
                     reader.readAsDataURL(file);
                 } else {
+                    saveAppearanceSettings();
                     renderAll(); 
                 }
                 
@@ -534,7 +591,8 @@
             });
 
             // Initial Game Start
-            initGame();
+            loadAppearanceSettings();
+            loadGameState();
         });
     </script>
 </body>
