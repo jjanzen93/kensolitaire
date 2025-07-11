@@ -534,17 +534,6 @@
                 renderWaste();
             }
             
-            function flipTopCard(tableauPile) {
-                if (tableauPile.length > 0) {
-                    const topCard = tableauPile[tableauPile.length - 1];
-                    if (!topCard.faceUp) {
-                        topCard.faceUp = true;
-                        return topCard.id;
-                    }
-                }
-                return null;
-            }
-            
             function checkWinCondition() {
                 const totalCardsInFoundation = foundations.reduce((sum, pile) => sum + pile.length, 0);
                 if (totalCardsInFoundation === 52) {
@@ -583,8 +572,6 @@
                     player.mute();
                 }
             });
-
-            // Mute button event listener removed
 
             stockPileContainer.addEventListener('click', dealFromStock);
             newGameBtn.addEventListener('click', initGame);
@@ -656,12 +643,13 @@
                     if (canPlaceOnTableau(cardToMove, targetPile)) {
                         const movements = [];
                         let flippedCardId = null;
-                        if (dragged.sourceType === 'tableau') {
-                            if (dragged.sourcePile.length > dragged.cards.length) {
-                                const cardToFlip = dragged.sourcePile[dragged.sourcePile.length - dragged.cards.length - 1];
-                                if (!cardToFlip.faceUp) {
-                                    flippedCardId = cardToFlip.id;
-                                }
+                        
+                        // *** BUG FIX: Corrected and simplified flip logic ***
+                        if (dragged.sourceType === 'tableau' && dragged.sourcePile.length > dragged.cards.length) {
+                            const cardToFlip = dragged.sourcePile[dragged.sourcePile.length - dragged.cards.length - 1];
+                            if (!cardToFlip.faceUp) {
+                                cardToFlip.faceUp = true; // Flip card in the data model immediately
+                                flippedCardId = cardToFlip.id; // Record the flip for the undo stack
                             }
                         }
 
@@ -671,30 +659,20 @@
                         });
                         targetPile.push(...movedCards);
                         
-                        if (flippedCardId) {
-                            const { card } = findCardAndPile(flippedCardId);
-                            if (card) card.faceUp = true;
-                        }
-                        
                         recordTurn(movements);
                         moveMade = true;
                     }
                 } else if (targetType === 'foundation') {
                     if (dragged.cards.length === 1 && canPlaceOnFoundation(cardToMove, targetEl)) {
                          let flippedCardId = null;
-                         if (dragged.sourceType === 'tableau') {
-                             if (dragged.sourcePile.length > 1) {
-                                const cardToFlip = dragged.sourcePile[dragged.sourcePile.length - 2];
-                                if (!cardToFlip.faceUp) {
-                                    flippedCardId = cardToFlip.id;
-                                }
-                             }
+                         if (dragged.sourceType === 'tableau' && dragged.sourcePile.length > 1) {
+                            const cardToFlip = dragged.sourcePile[dragged.sourcePile.length - 2];
+                            if (!cardToFlip.faceUp) {
+                                cardToFlip.faceUp = true;
+                                flippedCardId = cardToFlip.id;
+                            }
                          }
                          const movedCard = dragged.sourcePile.pop();
-                         if (flippedCardId) {
-                            const { card } = findCardAndPile(flippedCardId);
-                            if (card) card.faceUp = true;
-                         }
                          foundations[targetPileIndex].push(movedCard);
                          recordTurn([{ cardId: movedCard.id, from: sourceLocationId, to: targetLocationId, flipped: false, flippedCardId }]);
                          moveMade = true;
@@ -736,21 +714,17 @@
                 for (let i = 0; i < foundations.length; i++) {
                     if (canPlaceOnFoundation(cardToMove, foundationsContainer.children[i])) {
                         let flippedCardId = null;
-                        if (isFromTableau) {
-                            if (sourcePile.length > 1) {
-                                const cardToFlip = sourcePile[sourcePile.length - 2];
-                                if (!cardToFlip.faceUp) {
-                                    flippedCardId = cardToFlip.id;
-                                }
+                        if (isFromTableau && sourcePile.length > 1) {
+                            const cardToFlip = sourcePile[sourcePile.length - 2];
+                            if (!cardToFlip.faceUp) {
+                                cardToFlip.faceUp = true;
+                                flippedCardId = cardToFlip.id;
                             }
                         }
                         const targetLocationId = `foundation-${i}`;
-                        foundations[i].push(sourcePile.pop());
-                        if (flippedCardId) {
-                            const { card } = findCardAndPile(flippedCardId);
-                            if (card) card.faceUp = true;
-                        }
-                        recordTurn([{ cardId: cardToMove.id, from: sourceLocationId, to: targetLocationId, flipped: false, flippedCardId }]);
+                        const movedCard = sourcePile.pop();
+                        foundations[i].push(movedCard);
+                        recordTurn([{ cardId: movedCard.id, from: sourceLocationId, to: targetLocationId, flipped: false, flippedCardId }]);
                         renderAll();
                         checkWinCondition();
                         return;
