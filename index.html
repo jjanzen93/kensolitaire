@@ -69,16 +69,18 @@
             box-shadow: 0 0 0 4px var(--hint-border-color), 0 2px 4px rgba(0,0,0,0.1);
         }
         
-        .card .top-left, .card .bottom-right {
+        .card .top-left, .card .bottom-right, .card .top-right, .card .bottom-left {
             position: absolute;
-            text-align: center;
             line-height: 1;
         }
 
-        .card .top-left { top: 5px; left: 5px; }
-        .card .bottom-right { bottom: 5px; right: 5px; transform: rotate(180deg); }
-        .card .rank { font-size: 1.25rem; font-weight: 500; display: block; margin-bottom: 4px; }
-        .card .suit { font-size: 1.25rem; display: block; }
+        .card .top-left { top: 5px; left: 8px; }
+        .card .top-right { top: 5px; right: 8px; }
+        .card .bottom-left { bottom: 5px; left: 8px; transform: rotate(180deg); }
+        .card .bottom-right { bottom: 5px; right: 8px; transform: rotate(180deg); }
+
+        .card .rank { font-size: 1.25rem; font-weight: 500; }
+        .card .suit { font-size: 1.25rem; }
         
         .card.red { color: var(--red-suit-color); }
         .card.black { color: var(--black-suit-color); }
@@ -122,6 +124,7 @@
                     <button id="undo-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors">Undo</button>
                     <button id="settings-btn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors">Settings</button>
                     <button id="hints-btn" class="bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors">Hints: Off</button>
+                    <button id="autocomplete-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors" disabled>Autocomplete</button>
                 </div>
                 <div class="flex space-x-2 items-center">
                     <input type="text" id="youtube-url" placeholder="YouTube URL for background video" class="px-2 py-1 rounded-md text-sm text-black w-64">
@@ -188,7 +191,6 @@
 
     <script src="https://www.youtube.com/iframe_api"></script>
     <script>
-        // *** BUG FIX: Moved YouTube functions to the global scope ***
         let player;
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('youtube-player', {
@@ -206,7 +208,6 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // DOM Elements
             const gameContainer = document.getElementById('game-container');
             const foundationsContainer = document.getElementById('foundations');
             const tableauContainer = document.getElementById('tableau');
@@ -229,19 +230,18 @@
             const cardBackImageInput = document.getElementById('card-back-image');
             const hintsBtn = document.getElementById('hints-btn');
             const hintColorInput = document.getElementById('hint-color');
+            const autocompleteBtn = document.getElementById('autocomplete-btn');
 
-            // Game Constants & Settings
             const SUITS = ['♥', '♦', '♣', '♠'];
             const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
             const RANK_VALUES = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13 };
             let customCardBackUrl = null; 
             let hintsEnabled = false;
+            let autocompleteInterval = null;
 
-            // Game State
             let stock = [], waste = [], foundations = [[], [], [], []], tableau = [[], [], [], [], [], [], []], historyStack = [];
             let dragged = { element: null, cards: [], sourcePile: null, sourceType: null, sourceLocationId: null };
 
-            // --- Save/Load Logic ---
             function saveGameState() {
                 const gameState = { stock, waste, foundations, tableau, historyStack };
                 localStorage.setItem('solitaireGameState', JSON.stringify(gameState));
@@ -308,6 +308,10 @@
                 if (isNewGame) {
                     localStorage.removeItem('solitaireGameState');
                 }
+                if (autocompleteInterval) {
+                    clearInterval(autocompleteInterval);
+                    autocompleteInterval = null;
+                }
                 document.body.style.backgroundColor = 'var(--background-color)';
                 stock = []; waste = []; foundations = [[], [], [], []]; tableau = [[], [], [], [], [], [], []]; historyStack = [];
                 winModal.classList.add('hidden');
@@ -320,12 +324,17 @@
                 updateUndoButton();
             }
 
-            function renderAll() { renderTableau(); renderFoundations(); renderStock(); renderWaste(); applyHints(); }
+            function renderAll() { renderTableau(); renderFoundations(); renderStock(); renderWaste(); applyHints(); updateAutocompleteButton(); }
             function createCardElement(card) {
                 const cardEl = document.createElement('div'); cardEl.classList.add('card'); cardEl.dataset.id = card.id;
                 if (card.faceUp) {
                     cardEl.classList.add(card.color);
-                    cardEl.innerHTML = `<div class="top-left"><span class="rank">${card.rank}</span><span class="suit">${card.suit}</span></div><div class="bottom-right"><span class="rank">${card.rank}</span><span class="suit">${card.suit}</span></div>`;
+                    cardEl.innerHTML = `
+                        <div class="top-left"><span class="rank">${card.rank}</span></div>
+                        <div class="top-right"><span class="suit">${card.suit}</span></div>
+                        <div class="bottom-left"><span class="suit">${card.suit}</span></div>
+                        <div class="bottom-right"><span class="rank">${card.rank}</span></div>
+                    `;
                     cardEl.draggable = true;
                 } else { 
                     cardEl.classList.add('card-back'); 
@@ -432,7 +441,7 @@
                 }
                 if (movements.length > 0) { recordTurn(movements); }
             }
-            function checkWinCondition() { const total = foundations.reduce((sum, p) => sum + p.length, 0); if (total === 52) winModal.classList.remove('hidden'); }
+            function checkWinCondition() { const total = foundations.reduce((sum, p) => sum + p.length, 0); if (total === 52) { if(autocompleteInterval) clearInterval(autocompleteInterval); winModal.classList.remove('hidden'); } }
             function canPlaceOnTableau(card, targetPile) {
                 if (targetPile.length === 0) return true; const topCard = targetPile[targetPile.length - 1];
                 return card.color !== topCard.color && RANK_VALUES[card.rank] === RANK_VALUES[topCard.rank] - 1;
@@ -476,6 +485,44 @@
                 }
             }
 
+            function checkAutocompleteCondition() {
+                if (stock.length > 0 || waste.length > 0) return false;
+                return tableau.every(pile => pile.every(card => card.faceUp));
+            }
+
+            function updateAutocompleteButton() {
+                autocompleteBtn.disabled = !checkAutocompleteCondition();
+            }
+
+            function autocompleteGame() {
+                autocompleteBtn.disabled = true;
+                undoBtn.disabled = true;
+                hintsBtn.disabled = true;
+
+                autocompleteInterval = setInterval(() => {
+                    let moveMade = false;
+                    for (let i = 0; i < tableau.length; i++) {
+                        const pile = tableau[i];
+                        if (pile.length > 0) {
+                            const card = pile[pile.length - 1];
+                            for (let f = 0; f < foundations.length; f++) {
+                                if (canPlaceOnFoundation(card, foundations[f])) {
+                                    foundations[f].push(pile.pop());
+                                    renderAll();
+                                    checkWinCondition();
+                                    moveMade = true;
+                                    return; // Exit to allow re-render before next move
+                                }
+                            }
+                        }
+                    }
+                    if (!moveMade) {
+                        clearInterval(autocompleteInterval);
+                        autocompleteInterval = null;
+                    }
+                }, 100);
+            }
+
             playVideoBtn.addEventListener('click', () => {
                 const url = youtubeUrlInput.value; const videoId = getYouTubeVideoId(url);
                 if (videoId && player) { 
@@ -517,6 +564,7 @@
                 hintsBtn.classList.toggle('hover:bg-green-700', hintsEnabled);
                 applyHints();
             });
+            autocompleteBtn.addEventListener('click', autocompleteGame);
             
             gameContainer.addEventListener('dragstart', (e) => {
                 if (!e.target.classList.contains('card') || !e.target.draggable) { e.preventDefault(); return; }
